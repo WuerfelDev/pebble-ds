@@ -1,0 +1,11 @@
+[Unit]
+Description=Pebble Vosk Based Dictation service
+After=network.target
+
+[Service]
+WorkingDirectory=%h/pebble-ds/
+Environment="PATH=%h/pebble-ds/.venv/bin:/usr/bin"
+ExecStart=%h/pebble-ds/.venv/bin/waitress-serve --listen=0.0.0.0:443 app:app
+
+[Install]
+WantedBy=multi-user.target
