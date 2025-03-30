@@ -1,4 +1,4 @@
-from flask import Flask, request, Response
+from flask import Flask, request, Response,render_template
 from email.mime.multipart import MIMEMultipart
 from email.message import Message
 import json
@@ -7,8 +7,17 @@ from vosk import Model, KaldiRecognizer
 from rnnoise_wrapper import RNNoise
 from pydub import AudioSegment
 import audioop
+import datetime
+import os
 
-app = Flask(__name__)
+audio_debug = False
+
+if audio_debug:
+    app = Flask(__name__, static_url_path="/audio", static_folder="audio-debug")
+    os.makedirs("app/audio-debug", exist_ok=True)
+else:
+    app = Flask(__name__)
+
 
 decoder = SpeexDecoder(1)
 
@@ -27,6 +36,32 @@ except Exception as e:
 @app.route("/heartbeat")
 def heartbeat():
     return "asr"
+
+# Only routed if audio_debug is True
+def serve_recordings():
+    try:
+        files = []
+        for filename in sorted(os.listdir("app/audio-debug"), reverse=True):
+            if not filename.endswith(".wav"):
+                continue
+            txt_file = os.path.join("app/audio-debug", os.path.splitext(filename)[0] + ".txt")
+            if os.path.isfile(txt_file):
+                text = open(txt_file, "r").read().strip()
+                try:
+                    files.append({"wav": filename, "text": text})
+                    continue
+                except OSError as t:
+                    print("Unable to load txt file", t)
+                    pass
+            files.append({"wav": filename})
+    except OSError as e:
+        print("Unable to handle files", e)
+        files = []
+    return render_template("audio.html", entries=files)
+
+# Route /audio-debug
+if audio_debug:
+    app.add_url_rule("/audio-debug", view_func=serve_recordings)
 
 
 # From: https://github.com/pebble-dev/rebble-asr/blob/37302ebed464b7354accc9f4b6aa22736e12b266/asr/__init__.py#L27
@@ -66,7 +101,8 @@ def asr():
     response_part.add_header('Content-Type', 'application/JSON; charset=utf-8')
 
     try:
-        # complete = AudioSegment.empty()
+        if audio_debug:
+            complete = AudioSegment.empty()
 
         # Dirty way to remove initial/final button click
         if len(chunks) > 15:
@@ -80,9 +116,13 @@ def asr():
                 audio = rnnoise.filter(audio[0:10]) + rnnoise.filter(audio[10:20])
             # Transcribing audio chunk
             rec.AcceptWaveform(audio.raw_data)
-            # complete += audio
+            if audio_debug:
+                complete += audio
 
-        # complete.export(out_f="out.wav", format="wav")
+        if audio_debug:
+            #filename without extension
+            audiofile = f"app/audio-debug/pbl-debug-{datetime.datetime.now().isoformat()}"
+            complete.export(out_f=audiofile + ".wav", format="wav")
         final = json.loads(rec.Result())
 
         if final["text"]:
@@ -95,6 +135,11 @@ def asr():
             response_part.set_payload(json.dumps({
                 'words': [output],
             }))
+            if audio_debug:
+                try:
+                    open(audiofile + ".txt", "w").write(final["text"])
+                except OSError as e:
+                    print("Unable to write file", e)
         else:
             print("No words detected")
             response_part.add_header('Content-Disposition', 'form-data; name="QueryRetry"')

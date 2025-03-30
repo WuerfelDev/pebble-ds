@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Pebble DS Audio Debug</title>
+    <style>
+.text {
+  background-color: lightgray;  
+  padding: 5px;
+}
+    </style>
+  </head>
+  <body>
+    <h1>Pebble Dictation Audio Debug</h1>
+    <br><br>
+
+{% if entries is defined and entries|length %}
+  {% for entry in entries %}
+    <h3>{{ entry.wav }}:</h3>
+    <audio controls>
+      <source src="/audio/{{ entry.wav }}" />
+    </audio>
+    <br><br>
+    Text: <span class="text">
+    {% if entry.text is defined %}
+      {{ entry.text }}
+    {% else %}
+      <i>Not available</i>
+    {% endif %}
+    </span><br>
+
+  {{ "<hr>"|safe if not loop.last else "" }}
+
+  {% endfor %}
+{% else %}
+    Nothing here!
+{% endif %}
+  </body>
+</html>
