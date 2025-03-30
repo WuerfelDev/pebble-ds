@@ -1,15 +1,16 @@
-from flask import Flask, request, Response,render_template
-from email.mime.multipart import MIMEMultipart
-from email.message import Message
-import json
-from speex import SpeexDecoder
-from vosk import Model, KaldiRecognizer, MODEL_LIST_URL
-from rnnoise_wrapper import RNNoise
-from pydub import AudioSegment
 import audioop
+import json
 import os
-import requests
 import time
+from email.message import Message
+from email.mime.multipart import MIMEMultipart
+
+import requests
+from flask import Flask, Response, render_template, request
+from pydub import AudioSegment
+from rnnoise_wrapper import RNNoise
+from speex import SpeexDecoder
+from vosk import MODEL_LIST_URL, KaldiRecognizer, Model
 
 audio_debug = False
 current_lang = "en-us"
@@ -44,7 +45,7 @@ change_language(current_lang)
 
 try:
     rnnoise = RNNoise("/usr/local/lib/librnnoise.so")
-except Exception as e:
+except Exception:
     rnnoise = None
     print("RNNoise not found")
 

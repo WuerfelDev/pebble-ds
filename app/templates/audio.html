@@ -15,7 +15,7 @@
 
 {% if entries is defined and entries|length %}
   {% for entry in entries %}
-    <h3>{{ entry.time }}:</h3>
+    <h3>{{ entry.time }}</h3>
     <audio controls>
       <source src="/audio/{{ entry.wav }}" />
     </audio>
@@ -30,11 +30,11 @@
     {% endif %}
     </span>
 
-  {{ "<br><br><hr>"|safe if not loop.last else "" }}
+    {{ "<br><br><hr>"|safe if not loop.last else "" }}
 
   {% endfor %}
 {% else %}
-    Nothing here!
+  Nothing here!
 {% endif %}
   </body>
 </html>
