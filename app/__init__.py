@@ -3,14 +3,16 @@ from email.mime.multipart import MIMEMultipart
 from email.message import Message
 import json
 from speex import SpeexDecoder
-from vosk import Model, KaldiRecognizer
+from vosk import Model, KaldiRecognizer, MODEL_LIST_URL
 from rnnoise_wrapper import RNNoise
 from pydub import AudioSegment
 import audioop
 import datetime
 import os
+import requests
 
 audio_debug = False
+current_lang = "en-us"
 
 if audio_debug:
     app = Flask(__name__, static_url_path="/audio", static_folder="audio-debug")
@@ -20,11 +22,25 @@ else:
 
 
 decoder = SpeexDecoder(1)
+model = None
+rec = None
 
-model = Model(lang="it")
-rec = KaldiRecognizer(model, 16000)
-rec.SetWords(True)
-rec.SetPartialWords(True)
+# Load language list
+response = requests.get(MODEL_LIST_URL, timeout=10)
+available_languages = {m["lang"] for m in response.json()}
+
+def change_language(lang):
+    global model, rec, current_lang
+    del model
+    del rec
+    model = Model(lang=lang)
+    rec = KaldiRecognizer(model, 16000)
+    rec.SetWords(True)
+    rec.SetPartialWords(True)
+    current_lang = lang
+
+change_language(current_lang)
+
 
 try:
     rnnoise = RNNoise("/usr/local/lib/librnnoise.so")
@@ -90,6 +106,11 @@ def parse_chunks(stream):
 def asr():
     stream = request.stream
 
+    # Get language from subdomain
+    lang = request.host.split('.', 1)[0]
+    if current_lang != lang and lang in available_languages:
+        change_language(lang)
+
     # Parsing request
     chunks = list(parse_chunks(stream))[3:]  # 0 = Content Type, 1 = Header?
 
@@ -120,9 +141,8 @@ def asr():
                 complete += audio
 
         if audio_debug:
-            #filename without extension
-            audiofile = f"app/audio-debug/pbl-debug-{datetime.datetime.now().isoformat()}"
-            complete.export(out_f=audiofile + ".wav", format="wav")
+            identifier = f"app/audio-debug/pbl-debug-{datetime.datetime.now().isoformat()}-{current_lang}"
+            complete.export(out_f=identifier + ".wav", format="wav")
         final = json.loads(rec.Result())
 
         if final["text"]:
@@ -137,7 +157,7 @@ def asr():
             }))
             if audio_debug:
                 try:
-                    open(audiofile + ".txt", "w").write(final["text"])
+                    open(identifier + ".txt", "w").write(final["text"])
                 except OSError as e:
                     print("Unable to write file", e)
         else:
