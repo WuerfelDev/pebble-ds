@@ -15,20 +15,22 @@
 
 {% if entries is defined and entries|length %}
   {% for entry in entries %}
-    <h3>{{ entry.wav }}:</h3>
+    <h3>{{ entry.time }}:</h3>
     <audio controls>
       <source src="/audio/{{ entry.wav }}" />
     </audio>
     <br><br>
+    Language: {{ entry.lang }}
+    <br><br>
     Text: <span class="text">
-    {% if entry.text is defined %}
+    {% if entry.text is defined and entry.text|length %}
       {{ entry.text }}
     {% else %}
       <i>Not available</i>
     {% endif %}
-    </span><br>
+    </span>
 
-  {{ "<hr>"|safe if not loop.last else "" }}
+  {{ "<br><br><hr>"|safe if not loop.last else "" }}
 
   {% endfor %}
 {% else %}

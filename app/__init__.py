@@ -7,9 +7,9 @@ from vosk import Model, KaldiRecognizer, MODEL_LIST_URL
 from rnnoise_wrapper import RNNoise
 from pydub import AudioSegment
 import audioop
-import datetime
 import os
 import requests
+import time
 
 audio_debug = False
 current_lang = "en-us"
@@ -53,27 +53,23 @@ except Exception as e:
 def heartbeat():
     return "asr"
 
+
 # Only routed if audio_debug is True
 def serve_recordings():
+    entries = []
     try:
-        files = []
         for filename in sorted(os.listdir("app/audio-debug"), reverse=True):
-            if not filename.endswith(".wav"):
+            if not filename.endswith(".json"):
                 continue
-            txt_file = os.path.join("app/audio-debug", os.path.splitext(filename)[0] + ".txt")
-            if os.path.isfile(txt_file):
-                text = open(txt_file, "r").read().strip()
-                try:
-                    files.append({"wav": filename, "text": text})
-                    continue
-                except OSError as t:
-                    print("Unable to load txt file", t)
-                    pass
-            files.append({"wav": filename})
+            try:
+                with open(os.path.join("app/audio-debug", filename)) as f:
+                    entries.append(json.load(f))
+            except json.JSONDecodeError as e:
+                print(f"Problem loading json file '{filename}'\n{e}")
+
     except OSError as e:
-        print("Unable to handle files", e)
-        files = []
-    return render_template("audio.html", entries=files)
+        print(f"Problem getting files.\n{e}")
+    return render_template("audio.html", entries=entries)
 
 # Route /audio-debug
 if audio_debug:
@@ -140,9 +136,6 @@ def asr():
             if audio_debug:
                 complete += audio
 
-        if audio_debug:
-            identifier = f"app/audio-debug/pbl-debug-{datetime.datetime.now().isoformat()}-{current_lang}"
-            complete.export(out_f=identifier + ".wav", format="wav")
         final = json.loads(rec.Result())
 
         if final["text"]:
@@ -155,11 +148,6 @@ def asr():
             response_part.set_payload(json.dumps({
                 'words': [output],
             }))
-            if audio_debug:
-                try:
-                    open(identifier + ".txt", "w").write(final["text"])
-                except OSError as e:
-                    print("Unable to write file", e)
         else:
             print("No words detected")
             response_part.add_header('Content-Disposition', 'form-data; name="QueryRetry"')
@@ -168,6 +156,27 @@ def asr():
                 "Name": "AUDIO_INFO",
                 "Prompt": "Sorry, speech not recognized. Please try again."
             }))
+
+        if audio_debug:
+            identifier = f"pbl-debug-{time.time_ns()}"
+            identifier_path = f"app/audio-debug/{identifier}"
+            try:
+                complete.export(out_f=identifier_path + ".wav", format="wav")
+            except OSError as e:
+                print(f"Unable to write file '{identifier_path}.wav'\n{e}")
+            try:
+                data = {
+                    "wav": f"{identifier}.wav",
+                    "text": final["text"] if final["text"] else "",
+                    "lang": lang,
+                    "time": time.strftime("%Y-%m-%d %H:%M:%S")
+                }
+                with open(f"{identifier_path}.json", "w") as file:
+                    json.dump(data, file)
+
+            except OSError as e:
+                print(f"Unable to write json file '{identifier_path}.json'\n{e}")
+
     except Exception as e:
         print("Error occurred:", str(e))
         response_part.add_header('Content-Disposition', 'form-data; name="QueryRetry"')
